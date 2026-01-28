@@ -123,7 +123,7 @@ const SyncModal: React.FC<SyncModalProps> = ({ isOpen, onClose, onSave, currentU
                   <h4 className="text-sm font-bold text-rose-800 dark:text-rose-300">Passo Crucial para evitar duplicatas:</h4>
                   <p className="text-xs text-rose-700/80 dark:text-rose-400/80 leading-relaxed mt-1">
                     No Google Apps Script, após colar o código, você deve clicar em 
-                    <strong className="text-rose-900 dark:text-rose-200"> Implantar > Nova Implantação</strong>. 
+                    <strong className="text-rose-900 dark:text-rose-200"> Implantar &gt; Nova Implantação</strong>. 
                     Se você apenas salvar ou clicar em "Atualizar", o Google continuará rodando a versão antiga que causava duplicatas.
                   </p>
                 </div>
