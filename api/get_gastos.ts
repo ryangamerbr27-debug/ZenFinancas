@@ -1,11 +1,9 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { sql } from './db'
+import { neon } from '@neondatabase/serverless';
 
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse
-) {
+export default async function handler(req: Request) {
   try {
+    const sql = neon(process.env.DATABASE_URL!);
+
     const gastos = await sql`
       SELECT
         id,
@@ -13,14 +11,23 @@ export default async function handler(
         data,
         categoria,
         metodo_pagamento,
-        valor,
-        sincronizado_em
+        valor
       FROM gastos
       ORDER BY data DESC
-    `
-    res.status(200).json(gastos)
+    `;
+
+    return new Response(JSON.stringify(gastos), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
   } catch (error) {
-    console.error(error)
-    res.status(500).json({ error: 'Erro ao buscar gastos' })
+    console.error(error);
+
+    return new Response(
+      JSON.stringify({ error: 'Erro ao buscar gastos' }),
+      { status: 500 }
+    );
   }
 }
