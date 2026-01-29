@@ -6,7 +6,18 @@ export default async function handler(
   res: VercelResponse
 ) {
   try {
-    const gastos = await sql`SELECT * FROM gastos`
+    const gastos = await sql`
+      SELECT
+        id,
+        descricao,
+        data,
+        categoria,
+        metodo_pagamento,
+        valor,
+        sincronizado_em
+      FROM gastos
+      ORDER BY data DESC
+    `
     res.status(200).json(gastos)
   } catch (error) {
     console.error(error)
