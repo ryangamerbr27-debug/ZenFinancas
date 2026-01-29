@@ -5,6 +5,7 @@ import React, {
   useCallback,
   useMemo
 } from 'react';
+import './index.css';
 
 import { Expense, UserProfile } from './types';
 import { INITIAL_EXPENSES } from './constants';
