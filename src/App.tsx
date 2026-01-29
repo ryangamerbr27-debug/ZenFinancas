@@ -1,17 +1,16 @@
-
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Expense, CategoryType, UserProfile } from './types';
+import { Expense, UserProfile } from './types';
 import { INITIAL_EXPENSES } from './constants';
 import ExpenseForm from './components/ExpenseForm';
 import Dashboard from './components/Dashboard';
 import AIInsights from './components/AIInsights';
 import ExpenseList from './components/ExpenseList';
-import SyncModal from './components/SyncModal';
 import Sidebar from './components/Sidebar';
 import RegistrationView from './components/RegistrationView';
 import RemindersView from './components/RemindersView';
 import ProfileView from './components/ProfileView';
-import { syncToGoogleSheets } from './services/sheetService';
+// Importamos a nova função de sincronização para o Neon
+import { syncToNeon } from './services/sheetService';
 
 const App: React.FC = () => {
   const [activeView, setActiveView] = useState<'dashboard' | 'registration' | 'calendar' | 'profile'>('dashboard');
@@ -31,27 +30,30 @@ const App: React.FC = () => {
     };
   });
 
-  const [expenses, setExpenses] = useState<Expense[]>(() => {
-    const saved = localStorage.getItem('zenfinancas_expenses');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        return INITIAL_EXPENSES;
-      }
-    }
-    return INITIAL_EXPENSES;
-  });
-
+  const [expenses, setExpenses] = useState<Expense[]>(INITIAL_EXPENSES);
   const [viewDate, setViewDate] = useState(new Date());
-  const [sheetUrl, setSheetUrl] = useState(() => localStorage.getItem('zenfinancas_sheet_url') || '');
-  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   
   const syncInProgress = useRef(false);
   const formRef = useRef<HTMLDivElement>(null);
+
+  // 1. CARREGAR DADOS DO NEON AO INICIAR
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const response = await fetch('/api/get-gastos');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.length > 0) setExpenses(data);
+        }
+      } catch (err) {
+        console.error("Erro ao carregar dados do Neon:", err);
+      }
+    };
+    loadData();
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('zenfinancas_profile', JSON.stringify(user));
@@ -76,21 +78,14 @@ const App: React.FC = () => {
     });
   }, [expenses, viewDate]);
 
-  useEffect(() => {
-    localStorage.setItem('zenfinancas_expenses', JSON.stringify(expenses));
-  }, [expenses]);
-
-  useEffect(() => {
-    localStorage.setItem('zenfinancas_sheet_url', sheetUrl);
-  }, [sheetUrl]);
-
-  const handleSync = useCallback(async (manual: boolean = false) => {
-    if (!sheetUrl || syncInProgress.current) return;
+  // 2. SINCRONIZAÇÃO ATUALIZADA PARA NEON
+  const handleSync = useCallback(async () => {
+    if (syncInProgress.current) return;
     syncInProgress.current = true;
     setSyncing(true);
     setSyncStatus('idle');
     try {
-      const success = await syncToGoogleSheets(sheetUrl, expenses);
+      const success = await syncToNeon(expenses);
       if (success) {
         setSyncStatus('success');
         setTimeout(() => setSyncStatus('idle'), 3000);
@@ -104,7 +99,7 @@ const App: React.FC = () => {
       setSyncing(false);
       syncInProgress.current = false;
     }
-  }, [sheetUrl, expenses]);
+  }, [expenses]);
 
   const addExpense = (newExpenseData: Omit<Expense, 'id'> | Omit<Expense, 'id'>[]) => {
     const dataArray = Array.isArray(newExpenseData) ? newExpenseData : [newExpenseData];
@@ -121,7 +116,7 @@ const App: React.FC = () => {
   };
 
   const deleteExpense = useCallback((id: string) => {
-    if (window.confirm('Deseja realmente excluir este lançamento do seu histórico?')) {
+    if (window.confirm('Deseja realmente excluir este lançamento?')) {
       setExpenses(prev => prev.filter(expense => expense.id !== id));
       if (editingExpense && editingExpense.id === id) {
         setEditingExpense(null);
@@ -148,7 +143,7 @@ const App: React.FC = () => {
               allExpenses={expenses} 
               viewDate={viewDate}
               onViewDateChange={setViewDate}
-              onSync={() => handleSync(true)}
+              onSync={handleSync}
               isSyncing={syncing}
               syncStatus={syncStatus}
             />
@@ -195,13 +190,6 @@ const App: React.FC = () => {
       />
 
       <div className={`flex-1 transition-all duration-300 ${isSidebarOpen ? 'md:ml-72' : 'md:ml-24'}`}>
-        <SyncModal 
-          isOpen={isSyncModalOpen} 
-          onClose={() => setIsSyncModalOpen(false)} 
-          onSave={(url) => { setSheetUrl(url); setIsSyncModalOpen(false); handleSync(true); }}
-          currentUrl={sheetUrl}
-        />
-
         <header className="glass-header sticky top-0 z-40">
           <div className="max-w-6xl mx-auto px-4 md:px-8 h-20 flex items-center justify-between">
             <div className="flex items-center space-x-3">
@@ -220,7 +208,7 @@ const App: React.FC = () => {
             
             <div className="flex items-center space-x-2 md:space-x-4">
                <div className="flex flex-col items-end mr-2 hidden sm:flex">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Gestão de Finanças</span>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ZenFinanças</span>
                   <span className="text-xs font-bold text-slate-700 dark:text-slate-200">{user.name.split(' ')[0]}</span>
                </div>
 
@@ -239,13 +227,16 @@ const App: React.FC = () => {
                   </svg>
                 )}
               </button>
+              
+              {/* Botão de Sincronização Direta */}
               <button 
-                onClick={() => setIsSyncModalOpen(true)}
-                className="p-2.5 text-slate-500 dark:text-slate-400 hover:bg-white/50 dark:hover:bg-slate-800/50 rounded-xl transition-all"
+                onClick={handleSync}
+                disabled={syncing}
+                className={`p-2.5 rounded-xl transition-all ${syncing ? 'animate-spin text-blue-500' : 'text-slate-500 dark:text-slate-400 hover:bg-white/50 dark:hover:bg-slate-800/50'}`}
+                title="Sincronizar com Neon"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37a1.724 1.724 0 002.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
               </button>
             </div>
@@ -257,7 +248,7 @@ const App: React.FC = () => {
         </main>
 
         <footer className="mt-24 py-12 text-center text-slate-400 dark:text-slate-600 text-sm border-t border-white/10">
-          <p className="font-medium tracking-tight">ZenFinanças &copy; 2024 - Clarity in your pocket.</p>
+          <p className="font-medium tracking-tight">ZenFinanças &copy; 2026 - Clarity in your pocket.</p>
         </footer>
       </div>
     </div>
