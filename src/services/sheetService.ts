@@ -1,35 +1,24 @@
-
 import { Expense } from "../types";
 
-export const syncToGoogleSheets = async (url: string, expenses: Expense[]): Promise<boolean> => {
-  if (!url) return false;
-  
+export const syncToNeon = async (expenses: Expense[]): Promise<boolean> => {
   try {
-    // Ordenamos por data para que a planilha fique organizada visualmente
+    // Ordenamos por data
     const sortedData = [...expenses].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     
-    const response = await fetch(url, {
+    // Chamamos a nossa API interna da Vercel, não o Google Sheets
+    const response = await fetch('/api/sync', {
       method: 'POST',
-      mode: 'no-cors',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        timestamp: new Date().toISOString(),
-        data: sortedData.map(e => ({
-          ID: e.id,
-          Data: new Date(e.date).toLocaleDateString('pt-BR'),
-          Descricao: e.description,
-          Categoria: e.category,
-          Pagamento: e.paymentMethod,
-          Valor: e.amount
-        }))
+        data: sortedData // Enviamos os dados para a API salvar no Neon
       }),
     });
     
-    return true;
+    return response.ok;
   } catch (error) {
-    console.error("Erro ao sincronizar com Google Sheets:", error);
+    console.error("Erro ao sincronizar com Neon Tech:", error);
     return false;
   }
 };
